@@ -4,7 +4,7 @@ module ActiveAdmin::Sortable
     attr_accessor :sortable_options
 
     def sortable(options = {})
-      options.reverse_merge! :sorting_attribute => :position,
+      options.reverse_merge! :sorting_attribute => options[:nested_set] ? :lft : :position,
                              :parent_method => :parent,
                              :children_method => :children,
                              :roots_method => :roots,
@@ -13,6 +13,10 @@ module ActiveAdmin::Sortable
                              :protect_root => false,
                              :collapsible => false, #hides +/- buttons
                              :start_collapsed => false
+
+      if options[:nested_set] and not options[:roots_method]
+        options[:roots_collection] ||= proc { where(options[:parent_method] => nil) }
+      end
 
       # BAD BAD BAD FIXME: don't pollute original class
       @sortable_options = options
@@ -29,12 +33,31 @@ module ActiveAdmin::Sortable
         end
         errors = []
         ActiveRecord::Base.transaction do
-          records.each_with_index do |(record, parent_record), position|
-            record.send "#{options[:sorting_attribute]}=", position
-            if options[:tree]
-              record.send "#{options[:parent_method]}=", parent_record
+
+          if options[:nested_set]
+            # TODO perhaps don't rely on awesome_nested_set's move_to_* methods
+            records.each do |(record, parent_record)|
+              if not parent_record
+                record.move_to_root
+              elsif parent_record.children.empty?
+                record.move_to_child_of parent_record
+              elsif (lastchild = parent_record.children.last) != record
+                record.move_to_right_of lastchild
+              end
             end
-            errors << {record.id => record.errors} if !record.save
+            records.each do |(record, parent_record)|
+              errors << {record.id => record.errors} if !record.save
+            end
+
+          else
+            records.each_with_index do |(record, parent_record), position|
+              record.send "#{options[:sorting_attribute]}=", position
+              if options[:tree]
+                record.send "#{options[:parent_method]}=", parent_record
+              end
+              errors << {record.id => record.errors} if !record.save
+            end
+
           end
         end
         if errors.empty?

@@ -121,6 +121,7 @@ ActiveAdmin.register Page do
            roots_collection: nil,       # proc to specifiy retrieval of roots
            collapsible: false,          # show +/- buttons to collapse children
            start_collapsed: false,      # when collapsible, start with all roots collapsed
+           nested_set: false            # to work with awesome_nested_set
 end
 ```
 
